@@ -9,13 +9,13 @@ import java.util.Properties;
  */
 public class Arguments {
 
-  private int maxThreads;
-  private int numSkiers;
-  private int numSkiLifts;
-  private int skiDay;
-  private int dayLengthMinutes = 420; // stored here because potentially customizable in future
-  private String resort;
-  private String hostAddress;
+  final private int maxThreads;
+  final private int numSkiers;
+  final private int numSkiLifts;
+  final private int skiDay;
+  final private int dayLengthMinutes = 420; // stored here because potentially customizable in future
+  final private String resort;
+  final private String hostAddress;
 
   /**
    * Private constructor for use with factory methods.

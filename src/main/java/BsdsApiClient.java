@@ -7,6 +7,7 @@ import io.swagger.client.api.ResortsApi;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 public class BsdsApiClient {
 
@@ -23,25 +24,18 @@ public class BsdsApiClient {
       System.exit(1);
     }
 
-    System.out.println(arguments);
-    ResortsApi resortApiInstance = new ResortsApi();
-    SkiersApi skiersApiInstance = new SkiersApi();
-    resortApiInstance.getApiClient().setBasePath(arguments.getHostAddress());
-    skiersApiInstance.getApiClient().setBasePath(arguments.getHostAddress());
-    List<String> resort = Arrays.asList("resort_example"); // List<String> | resort to query by
-    List<String> dayID = Arrays.asList("dayID_example"); // List<String> | day number in the season
+    // Start threads
+    CountDownLatch latch = new CountDownLatch(3);
+    for (int i = 0; i < 3; i++) {
+      PhaseRunner runner = new PhaseRunner(100, 0, arguments, latch);
+      runner.setSkierIdRange(1, 100);
+      runner.setTimeRange(1, 420);
+      new Thread(runner).start();
+    }
     try {
-      TopTen result1 = resortApiInstance.getTopTenVert(resort, dayID);
-      SkierVertical result2 = skiersApiInstance.getSkierDayVertical("123", "123", "123");
-      SkierVertical result3 = skiersApiInstance.getSkierResortTotals("123", resort);
-      System.out.println(result1);
-      System.out.println(result2);
-      System.out.println(result3);
-
-      skiersApiInstance.writeNewLiftRide(new LiftRide());
-      System.out.println("No error, write worked?");
-    } catch (ApiException e) {
-      System.err.println("Exception when calling ResortsApi#getTopTenVert");
+      latch.await();
+    } catch (InterruptedException e) {
+      System.err.println("An issue occurred executing threads: " + e.getMessage());
       e.printStackTrace();
     }
   }
