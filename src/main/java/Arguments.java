@@ -33,7 +33,7 @@ public class Arguments {
   /**
    * Creates an Arguments instance from a properties file.
    * Available properties:
-   *   - maxThreads (min:1, max: 256)
+   *   - maxThreads (min:4, max: 256)
    *   - numSkiers (default: 50000, min: 0)
    *   - numSkiLifts (default: 40, min: 5, max:60)
    *   - skiDay (default: 1, min: 1, max: 366)
@@ -120,7 +120,7 @@ public class Arguments {
 
     // Validate numerical fields
     // Check separately for better error messages
-    boolean threadsCondition = (maxThreads >= 1 && maxThreads <= 256);
+    boolean threadsCondition = (maxThreads >= 4 && maxThreads <= 256);
     boolean skiersCondition = (numSkiers >= 0);
     boolean liftsCondition = (numSkiLifts >= 5 && numSkiLifts <= 60);
     boolean dayCondition = (skiDay >= 1 && skiDay <= 366);

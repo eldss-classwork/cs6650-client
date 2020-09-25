@@ -4,7 +4,7 @@ import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.IntStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * PhaseRunner uses the client SDK to call the server API in an automated way.
@@ -16,7 +16,9 @@ public class PhaseRunner implements Runnable {
 
   private SkiersApi skiersApiInstance;
   private Arguments args;
-  private CountDownLatch latch;
+  private CountDownLatch completionLatch;
+  private CountDownLatch nextPhaseLatch;
+  private AtomicInteger badRequestCount;
   private int numPosts;
   private int numGets;
   private int skierIdLow;
@@ -31,15 +33,30 @@ public class PhaseRunner implements Runnable {
    * setSkierIdRange and setTimeRange. These fields will be null if not set.
    * @throws IllegalArgumentException if args is null or either numPosts or numGets is negative
    */
-  public PhaseRunner(int numPosts, int numGets, Arguments args, CountDownLatch latch) throws IllegalArgumentException {
-    if (args == null || latch == null || numPosts < 0 || numGets < 0) {
+  public PhaseRunner(
+      int numPosts,
+      int numGets,
+      Arguments args,
+      CountDownLatch completionLatch,
+      AtomicInteger badRequestCount,
+      CountDownLatch nextPhaseLatch)
+      throws IllegalArgumentException
+  {
+    if (args == null || completionLatch == null || numPosts < 0 || numGets < 0) {
       throw new IllegalArgumentException(
           "invalid arguments - args cannot be null, posts and gets cannot be negative");
     }
     this.numPosts = numPosts;
     this.numGets = numGets;
     this.args = args;
-    this.latch = latch;
+    this.completionLatch = completionLatch;
+    this.nextPhaseLatch = nextPhaseLatch;
+    this.badRequestCount = badRequestCount;
+
+    // Prevent null pointer errors if no next phase is given
+    if (nextPhaseLatch == null) {
+      this.nextPhaseLatch = new CountDownLatch(0);
+    }
 
     // Set up api caller instance
     this.skiersApiInstance = new SkiersApi();
@@ -85,7 +102,8 @@ public class PhaseRunner implements Runnable {
   @Override
   public void run() {
     performPosts();
-    latch.countDown();
+    nextPhaseLatch.countDown();
+    completionLatch.countDown();
   }
 
   private void performPosts() {
@@ -110,23 +128,20 @@ public class PhaseRunner implements Runnable {
       // Attempt request
       try {
         ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
-        // TODO: remove this test print
-        int code = resp.getStatusCode();
-        System.out.println("POST " + i + " status: " + code);
-        if (code != CREATED) {
-          // TODO: increment a failed response counter
+        if (resp.getStatusCode() != CREATED) {
           // TODO: log all failed requests with log4j
-          System.out.println("Failed Request!");
+          badRequestCount.getAndIncrement();
+          System.err.println("Failed Request!");
         }
       } catch (ApiException e) {
-        // TODO: increment a failed response counter
+        badRequestCount.getAndIncrement();
         System.err.println("API error: " + e.getMessage());
       }
     }
   }
 
   private void performGets() {
-
+    final int SUCCESS = 200;
   }
 
   private String nextSkierId(ThreadLocalRandom rand) {
