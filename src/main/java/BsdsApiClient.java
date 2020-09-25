@@ -11,6 +11,7 @@ import java.util.*;
 public class BsdsApiClient {
 
   public static void main(String[] args) {
+    // Get arguments from properties file
     Arguments arguments = null;
     try {
       arguments = Arguments.fromPropertiesFile("arguments.properties");

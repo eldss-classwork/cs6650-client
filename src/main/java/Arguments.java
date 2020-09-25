@@ -8,13 +8,18 @@ import java.util.Properties;
  * is immutable.
  */
 public class Arguments {
+
   private int maxThreads;
   private int numSkiers;
   private int numSkiLifts;
   private int skiDay;
+  private int dayLengthMinutes = 420; // stored here because potentially customizable in future
   private String resort;
   private String hostAddress;
 
+  /**
+   * Private constructor for use with factory methods.
+   */
   private Arguments(int maxThreads, int numSkiers, int numSkiLifts, int skiDay,
       String resort, String hostAddress) {
     this.maxThreads = maxThreads;
@@ -51,13 +56,14 @@ public class Arguments {
       props = new Properties();
       props.load(fis);
     } catch(FileNotFoundException fnfe) {
-      fnfe.printStackTrace();
+      System.err.println("Could not find properties file: " + fnfe.getMessage());
     } catch(IOException ioe) {
-      ioe.printStackTrace();
+      System.err.println("Problem reading properties file: " + ioe.getMessage());
     } finally {
-      fis.close();
+      if (fis != null) {
+        fis.close();
+      }
     }
-
     return fromProperties(props);
   }
 
@@ -87,7 +93,7 @@ public class Arguments {
     String liftsName = "numSkiLifts";
     String dayName = "skiDay";
 
-    // Check required fields
+    // Check required fields are given
     resort = props.getProperty(resortName);
     hostAddress = props.getProperty(hostAddressName);
     String maxThreadsRaw = props.getProperty(threadsName);
@@ -98,12 +104,18 @@ public class Arguments {
     // Get and convert numerical fields
     try {
       maxThreads = Integer.parseInt(maxThreadsRaw);
-      numSkiers = Integer.parseInt(props.getProperty(skiersName, skiersDefault));
-      numSkiLifts = Integer.parseInt(props.getProperty(liftsName, liftsDefault));
-      skiDay = Integer.parseInt(props.getProperty(dayName, dayDefault));
+      numSkiers = Integer.parseInt(
+          props.getProperty(skiersName, skiersDefault)
+      );
+      numSkiLifts = Integer.parseInt(
+          props.getProperty(liftsName, liftsDefault)
+      );
+      skiDay = Integer.parseInt(
+          props.getProperty(dayName, dayDefault)
+      );
     } catch (NumberFormatException e) {
       throw new IllegalArgumentException(
-          "could not parse properties file: malformed numerical data");
+          "could not parse properties file - malformed numerical data");
     }
 
     // Validate numerical fields
@@ -145,6 +157,10 @@ public class Arguments {
     return skiDay;
   }
 
+  public int getDayLengthMinutes() {
+    return dayLengthMinutes;
+  }
+
   public String getResort() {
     return resort;
   }
@@ -160,6 +176,7 @@ public class Arguments {
         ", numSkiers=" + numSkiers +
         ", numSkiLifts=" + numSkiLifts +
         ", skiDay=" + skiDay +
+        ", dayLengthMinutes=" + dayLengthMinutes +
         ", resort='" + resort + '\'' +
         ", hostAddress='" + hostAddress + '\'' +
         '}';
