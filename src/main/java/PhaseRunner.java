@@ -2,6 +2,7 @@ import io.swagger.client.ApiException;
 import io.swagger.client.ApiResponse;
 import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
+import io.swagger.client.model.SkierVertical;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,6 +20,7 @@ public class PhaseRunner implements Runnable {
   private CountDownLatch completionLatch;
   private CountDownLatch nextPhaseLatch;
   private AtomicInteger badRequestCount;
+  private ThreadLocalRandom rand;
   private int numPosts;
   private int numGets;
   private int skierIdLow;
@@ -61,6 +63,9 @@ public class PhaseRunner implements Runnable {
     // Set up api caller instance
     this.skiersApiInstance = new SkiersApi();
     this.skiersApiInstance.getApiClient().setBasePath(this.args.getHostAddress());
+
+    // Thread-safe random number generator for generating API calls
+    this.rand = ThreadLocalRandom.current();
   }
 
   /**
@@ -102,13 +107,12 @@ public class PhaseRunner implements Runnable {
   @Override
   public void run() {
     performPosts();
+    performGets();
     nextPhaseLatch.countDown();
     completionLatch.countDown();
   }
 
   private void performPosts() {
-    final int CREATED = 201;
-
     // Set up reusable parts of a lift ride
     LiftRide liftRide = new LiftRide();
     liftRide.setResortID(args.getResort());
@@ -116,24 +120,17 @@ public class PhaseRunner implements Runnable {
         String.valueOf(args.getSkiDay())
     );
 
-    // Thread-safe random number generator for other vars
-    ThreadLocalRandom rand = ThreadLocalRandom.current();
-
     for (int i = 0; i < numPosts; i++) {
       // Set up random variables for skier, lift and time
-      liftRide.setSkierID(nextSkierId(rand));
-      liftRide.setTime(nextTime(rand));
-      liftRide.setLiftID(nextLift(rand));
+      liftRide.setSkierID(nextSkierId());
+      liftRide.setTime(nextTime());
+      liftRide.setLiftID(nextLift());
 
       // Attempt request
       try {
-        ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
-        if (resp.getStatusCode() != CREATED) {
-          // TODO: log all failed requests with log4j
-          badRequestCount.getAndIncrement();
-          System.err.println("Failed Request!");
-        }
+        skiersApiInstance.writeNewLiftRide(liftRide);
       } catch (ApiException e) {
+        // TODO: log all failed requests with log4j
         badRequestCount.getAndIncrement();
         System.err.println("API error: " + e.getMessage());
       }
@@ -141,18 +138,31 @@ public class PhaseRunner implements Runnable {
   }
 
   private void performGets() {
-    final int SUCCESS = 200;
+    for (int i = 0; i < numGets; i++) {
+      try {
+        // Don't need results at this time
+        skiersApiInstance.getSkierDayVertical(
+            args.getResort(),
+            String.valueOf(args.getSkiDay()),
+            nextSkierId()
+        );
+      } catch (ApiException e) {
+        // TODO: log all failed requests with log4j
+        badRequestCount.getAndIncrement();
+        System.err.println("API error: " + e.getMessage());
+      }
+    }
   }
 
-  private String nextSkierId(ThreadLocalRandom rand) {
+  private String nextSkierId() {
     return String.valueOf(rand.nextInt(skierIdLow, skierIdHigh + 1));
   }
 
-  private String nextTime(ThreadLocalRandom rand) {
+  private String nextTime() {
     return String.valueOf(rand.nextInt(timeLow, timeHigh + 1));
   }
 
-  private String nextLift(ThreadLocalRandom rand) {
+  private String nextLift() {
     return String.valueOf(rand.nextInt(args.getNumSkiLifts()));
   }
 }
