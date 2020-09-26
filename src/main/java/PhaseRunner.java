@@ -1,11 +1,12 @@
 import io.swagger.client.ApiException;
-import io.swagger.client.ApiResponse;
 import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
-import io.swagger.client.model.SkierVertical;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * PhaseRunner uses the client SDK to call the server API in an automated way.
@@ -14,6 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
  */
 public class PhaseRunner implements Runnable {
+
+  // Limited logging performed here due to high execution volume
+  private static final Logger logger = LogManager.getLogger(PhaseRunner.class);
 
   private SkiersApi skiersApiInstance;
   private Arguments args;
@@ -130,9 +134,10 @@ public class PhaseRunner implements Runnable {
       try {
         skiersApiInstance.writeNewLiftRide(liftRide);
       } catch (ApiException e) {
-        // TODO: log all failed requests with log4j
         badRequestCount.getAndIncrement();
         System.err.println("API error: " + e.getMessage());
+        logger.error("API error: " + e.getMessage() + "\n"
+            + Arrays.toString(e.getStackTrace()));
       }
     }
   }
@@ -147,9 +152,10 @@ public class PhaseRunner implements Runnable {
             nextSkierId()
         );
       } catch (ApiException e) {
-        // TODO: log all failed requests with log4j
         badRequestCount.getAndIncrement();
         System.err.println("API error: " + e.getMessage());
+        logger.error("API error: " + e.getMessage() + "\n"
+            + Arrays.toString(e.getStackTrace()));
       }
     }
   }

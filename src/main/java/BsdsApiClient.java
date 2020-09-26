@@ -1,14 +1,21 @@
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class BsdsApiClient {
+
+  private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
 
   private static AtomicInteger totalRequests = new AtomicInteger();
   private static AtomicInteger totalBadRequests = new AtomicInteger();
 
   public static void main(String[] args) throws InterruptedException {
+    infoLogAndPrint("Starting client...");
+
     // Get arguments from properties file
+    logger.trace("parsing properties file");
     Arguments propertyArgs = null;
     try {
       propertyArgs = Arguments.fromPropertiesFile("arguments.properties");
@@ -21,12 +28,16 @@ public class BsdsApiClient {
     }
     final Arguments arguments = propertyArgs;
 
+    // Track total execution time
+    // Keeping setup of first phase because all others will be included
+    long start = System.currentTimeMillis();
     /*
      * =====================================================================
      * Phase one of the client process. Warmup. Phase specifications at
      * https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
      * =====================================================================
      */
+    logger.trace("phase 1 set-up");
 
     // Set up trigger for phase two (starts after 10% threads finish)
     int numThreadsP1 = arguments.getMaxThreads() / 4;
@@ -52,7 +63,7 @@ public class BsdsApiClient {
     };
     Thread phase1 = new Thread(run1);
 
-    System.out.println("Phase 1 Start");
+    infoLogAndPrint("Starting phase 1...");
     phase1.start();
     phase2Latch.await();
 
@@ -61,6 +72,7 @@ public class BsdsApiClient {
      * Phase two of the client process. Peak.
      * =====================================================================
      */
+    logger.trace("phase 2 set-up");
 
     // Set up trigger for phase two (starts after 10% threads finish)
     int numThreadsP2 = arguments.getMaxThreads();
@@ -85,7 +97,7 @@ public class BsdsApiClient {
     };
     Thread phase2 = new Thread(run2);
 
-    System.out.println("Phase 2 Start");
+    infoLogAndPrint("Starting phase 2...");
     phase2.start();
     phase3Latch.await();
 
@@ -94,6 +106,7 @@ public class BsdsApiClient {
      * Phase three of the client process. Cooldown.
      * =====================================================================
      */
+    logger.trace("phase 3 set-up");
 
     // No trigger needed for phase 3, last phase
     int numThreadsP3 = numThreadsP1;
@@ -116,19 +129,32 @@ public class BsdsApiClient {
     };
     Thread phase3 = new Thread(run3);
 
-    System.out.println("Phase 3 Start");
+    infoLogAndPrint("Starting phase 3...");
     phase3.start();
 
     // Ensure all phases complete
     phase1.join();
     phase2.join();
     phase3.join();
-    System.out.println("All phases complete. Calculating statistics.");
+    long end = System.currentTimeMillis();
+
+    infoLogAndPrint("All phases complete");
+    System.out.println();  // newline for terminal users
 
     // Final stats
-    System.out.println("Statistics:");
-    System.out.println("\tTotal requests: " + totalRequests);
-    System.out.println("\tBad Requests: " + totalBadRequests);
+    int millisecsPerSec = 1000;
+    double wallTime = (double)(end - start) / millisecsPerSec;
+    double throughput = totalRequests.get() / wallTime;
+    double goodThroughput = (totalRequests.get() - totalBadRequests.get()) / wallTime;
+
+    String stats = String.format("Execution Statistics:\n"
+        + "\tTotal requests: %d\n"
+        + "\tBad Requests: %d\n"
+        + "\tWall Time: %.2f seconds\n"
+        + "\tTotal Throughput: %.2f requests/second\n"
+        + "\tSuccess Throughput: %.2f requests/second\n"
+        , totalRequests.get(), totalBadRequests.get(), wallTime, throughput, goodThroughput);
+    infoLogAndPrint(stats);
   }
 
   /**
@@ -194,5 +220,14 @@ public class BsdsApiClient {
     // Calculate total requests completed
     int numPhaseRequests = (numPostRequestsPerThread + numGetRequestsPerThread) * numThreads;
     totalRequests.getAndAdd(numPhaseRequests);
+  }
+
+  /**
+   * Produces an INFO level log and prints to System.out for user friendly readability
+   * @param msg A message to output
+   */
+  static private void infoLogAndPrint(String msg) {
+    logger.info(msg);
+    System.out.println(msg);
   }
 }
