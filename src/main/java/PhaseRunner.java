@@ -116,6 +116,9 @@ public class PhaseRunner implements Runnable {
     completionLatch.countDown();
   }
 
+  /**
+   * Runs the POST requests required against the server.
+   */
   private void performPosts() {
     // Set up reusable parts of a lift ride
     LiftRide liftRide = new LiftRide();
@@ -142,6 +145,9 @@ public class PhaseRunner implements Runnable {
     }
   }
 
+  /**
+   * Runs the GET requests required against the server.
+   */
   private void performGets() {
     for (int i = 0; i < numGets; i++) {
       try {
