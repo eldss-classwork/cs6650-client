@@ -121,7 +121,7 @@ public class PhaseRunner implements Runnable {
   public void run() {
     performPosts();
     performGets();
-    stats.addStatArray(singleRequestStatisticsArray);
+    stats.addToStatArray(singleRequestStatisticsArray);
     nextPhaseLatch.countDown();
     completionLatch.countDown();
   }
@@ -146,21 +146,19 @@ public class PhaseRunner implements Runnable {
       liftRide.setLiftID(nextLift());
 
       // Attempt request
+      long reqStart = System.currentTimeMillis();
       try {
         // Get response info and time it. Write stats to array.
-        long reqStart = System.currentTimeMillis();
         ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
         appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
 
-        if (resp.getStatusCode() / 100 != 2) {
-          stats.getTotalBadRequests().getAndIncrement();
-          logger.error("Received bad response code: " + resp.getStatusCode()
-            + " from POST with " + liftRide.toString());
-        }
-
+      // Includes 4XX/5XX responses
       } catch (ApiException e) {
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"
@@ -176,9 +174,9 @@ public class PhaseRunner implements Runnable {
     String reqType = "GET";
 
     for (int i = 0; i < numGets; i++) {
+      long reqStart = System.currentTimeMillis();
       try {
         // Get response info and time it. Write stats to array.
-        long reqStart = System.currentTimeMillis();
         ApiResponse<SkierVertical> resp = skiersApiInstance.getSkierDayVerticalWithHttpInfo(
             args.getResort(),
             String.valueOf(args.getSkiDay()),
@@ -188,12 +186,11 @@ public class PhaseRunner implements Runnable {
         long latency = reqEnd - reqStart;
         appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
 
-        if (resp.getStatusCode() / 100 != 2) {
-          stats.getTotalBadRequests().getAndIncrement();
-          logger.error("Received bad response code: " + resp.getStatusCode()
-              + " from GET to skierDayVertical");
-        }
+      // Includes 4XX/5XX responses
       } catch (ApiException e) {
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"

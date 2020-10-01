@@ -5,7 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class BsdsApiClient {
-
+  // TODO: Get CSV Filename from properties
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
 
   public static void main(String[] args) throws InterruptedException {
@@ -142,22 +142,29 @@ public class BsdsApiClient {
     phase3.join();
     stats.stopWallTimer();
     infoLogAndPrint("All phases complete");
+    System.out.println();  // newline for terminal user readability
 
-    // Write individual request stats to csv
-    try {
-      stats.requestStatsToCsv("request-stats.csv");
-    } catch (IOException e) {
-      String msg = "Problem writing request statistics CSV: ";
-      logger.error(msg + e.getMessage()
-          + "\n" + Arrays.toString(e.getStackTrace()));
-      System.err.println(msg + "See logs for details");
-    }
+    // Write individual request stats to csv in separate thread
+    Runnable writeCsvR = () -> {
+      try {
+        String csvFileName = "request-stats.csv";
+        stats.buildStatsCsv(csvFileName);
+      } catch (IOException e) {
+        String msg = "Problem writing request statistics CSV: ";
+        logger.error(msg + e.getMessage()
+            + "\n" + Arrays.toString(e.getStackTrace()));
+        System.err.println(msg + "See logs for details");
+      }
+    };
+    Thread writeCsvT = new Thread(writeCsvR);
+    writeCsvT.start();
 
     // Final stats
-    System.out.println();  // newline for terminal user readability
+    stats.performFinalCalcs();
     infoLogAndPrint(stats.toString());
 
-
+    // Ensure CSV thread completes
+    writeCsvT.join();
   }
 
   /**
