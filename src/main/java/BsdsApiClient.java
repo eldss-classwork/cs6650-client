@@ -1,15 +1,12 @@
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class BsdsApiClient {
 
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
-
-  private static AtomicInteger totalRequests = new AtomicInteger();
-  private static AtomicInteger totalBadRequests = new AtomicInteger();
 
   public static void main(String[] args) throws InterruptedException {
     infoLogAndPrint("Starting client...");
@@ -28,9 +25,13 @@ public class BsdsApiClient {
     }
     final Arguments arguments = propertyArgs;
 
+    // Statistics tracker
+    final BulkRequestStatistics stats = new BulkRequestStatistics();
+
     // Track total execution time
     // Keeping setup of first phase because all others will be included
-    long start = System.currentTimeMillis();
+    stats.startWallTimer();
+
     /*
      * =====================================================================
      * Phase one of the client process. Warmup. Phase specifications at
@@ -58,7 +59,8 @@ public class BsdsApiClient {
           endTime,
           numPostRequestsPerThread,
           numGetRequestsPerThread,
-          phase2Latch
+          phase2Latch,
+          stats
       );
     };
     Thread phase1 = new Thread(run1);
@@ -92,7 +94,8 @@ public class BsdsApiClient {
           endTime,
           numPostRequestsPerThread,
           numGetRequestsPerThread,
-          phase3Latch
+          phase3Latch,
+          stats
       );
     };
     Thread phase2 = new Thread(run2);
@@ -124,7 +127,8 @@ public class BsdsApiClient {
           endTime,
           numPostRequestsPerThread,
           numGetRequestsPerThread,
-          new CountDownLatch(0)
+          new CountDownLatch(0),
+          stats
       );
     };
     Thread phase3 = new Thread(run3);
@@ -136,25 +140,24 @@ public class BsdsApiClient {
     phase1.join();
     phase2.join();
     phase3.join();
-    long end = System.currentTimeMillis();
-
+    stats.stopWallTimer();
     infoLogAndPrint("All phases complete");
-    System.out.println();  // newline for terminal users
+
+    // Write individual request stats to csv
+    try {
+      stats.requestStatsToCsv("request-stats.csv");
+    } catch (IOException e) {
+      String msg = "Problem writing request statistics CSV: ";
+      logger.error(msg + e.getMessage()
+          + "\n" + Arrays.toString(e.getStackTrace()));
+      System.err.println(msg + "See logs for details");
+    }
 
     // Final stats
-    int millisecsPerSec = 1000;
-    double wallTime = (double)(end - start) / millisecsPerSec;
-    double throughput = totalRequests.get() / wallTime;
-    double goodThroughput = (totalRequests.get() - totalBadRequests.get()) / wallTime;
+    System.out.println();  // newline for terminal user readability
+    infoLogAndPrint(stats.toString());
 
-    String stats = String.format("Execution Statistics:\n"
-        + "\tTotal requests: %d\n"
-        + "\tBad Requests: %d\n"
-        + "\tWall Time: %.2f seconds\n"
-        + "\tTotal Throughput: %.2f requests/second\n"
-        + "\tSuccess Throughput: %.2f requests/second\n"
-        , totalRequests.get(), totalBadRequests.get(), wallTime, throughput, goodThroughput);
-    infoLogAndPrint(stats);
+
   }
 
   /**
@@ -166,7 +169,8 @@ public class BsdsApiClient {
    * @param numPostRequestsPerThread number of POST requests to make per thread
    * @param numGetRequestsPerThread number of GET requests to make per thread
    * @param nextPhaseLatch a CountDownLatch to determine when the next phase can start
-   *                       (null or set to 0 if there is no next phase).
+   *                       (null or set to 0 if there is no next phase)
+   * @param stats object to collect statistics from
    */
   private static void executePhase(
       Arguments arguments,
@@ -175,7 +179,8 @@ public class BsdsApiClient {
       int endTime,
       int numPostRequestsPerThread,
       int numGetRequestsPerThread,
-      CountDownLatch nextPhaseLatch)
+      CountDownLatch nextPhaseLatch,
+      BulkRequestStatistics stats)
   {
     // Set-up vars given in spec
     int skiersPerThread = arguments.getNumSkiers() / numThreads;
@@ -196,7 +201,7 @@ public class BsdsApiClient {
           numGetRequestsPerThread,
           arguments,
           completionLatch,
-          totalBadRequests,
+          stats,
           nextPhaseLatch
       );
       // Probably a poor design choice here, will fix given the time
@@ -218,8 +223,9 @@ public class BsdsApiClient {
     }
 
     // Calculate total requests completed
+    // Done here for performance reasons (no waiting for adds on each thread)
     int numPhaseRequests = (numPostRequestsPerThread + numGetRequestsPerThread) * numThreads;
-    totalRequests.getAndAdd(numPhaseRequests);
+    stats.getTotalRequests().getAndAdd(numPhaseRequests);
   }
 
   /**

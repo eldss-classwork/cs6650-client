@@ -3,19 +3,19 @@
  */
 public class SingleRequestStatistics {
 
-  private final String requestType;
-  private final int startTime;
-  private final int latency;
-  private final int responseCode;
+  private String requestType;
+  private long startTime;
+  private long latency;
+  private int responseCode;
 
   /**
-   * Constructor for SingleRequestStatistics. Once set, values are final.
+   * Constructor for SingleRequestStatistics.
    * @param requestType The request type (i.e. "GET" or "POST")
    * @param startTime The unix time at the start of the request
    * @param latency The latency of the request (e.g. the round trip time)
    * @param responseCode The response code returned from the server
    */
-  public SingleRequestStatistics(String requestType, int startTime, int latency, int responseCode) {
+  public SingleRequestStatistics(String requestType, long startTime, long latency, int responseCode) {
     this.requestType = requestType;
     this.startTime = startTime;
     this.latency = latency;
@@ -26,15 +26,17 @@ public class SingleRequestStatistics {
     return requestType;
   }
 
-  public int getStartTime() {
+  public long getStartTime() {
     return startTime;
   }
 
-  public int getLatency() {
+  public long getLatency() {
     return latency;
   }
 
   public int getResponseCode() {
     return responseCode;
   }
+
+
 }

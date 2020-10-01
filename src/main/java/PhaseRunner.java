@@ -1,10 +1,11 @@
 import io.swagger.client.ApiException;
+import io.swagger.client.ApiResponse;
 import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
+import io.swagger.client.model.SkierVertical;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -15,16 +16,20 @@ import org.apache.logging.log4j.Logger;
  * https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
  */
 public class PhaseRunner implements Runnable {
+  // TODO: Add another field for the BulkRequestStatistics object
 
   // Limited logging performed here due to high execution volume
   private static final Logger logger = LogManager.getLogger(PhaseRunner.class);
+
 
   private SkiersApi skiersApiInstance;
   private Arguments args;
   private CountDownLatch completionLatch;
   private CountDownLatch nextPhaseLatch;
-  private AtomicInteger badRequestCount;
+  private BulkRequestStatistics stats;
   private ThreadLocalRandom rand;
+  private SingleRequestStatistics[] singleRequestStatisticsArray;
+  private int singleStatsCurrIndex;
   private int numPosts;
   private int numGets;
   private int skierIdLow;
@@ -44,11 +49,11 @@ public class PhaseRunner implements Runnable {
       int numGets,
       Arguments args,
       CountDownLatch completionLatch,
-      AtomicInteger badRequestCount,
+      BulkRequestStatistics stats,
       CountDownLatch nextPhaseLatch)
       throws IllegalArgumentException
   {
-    if (args == null || completionLatch == null || numPosts < 0 || numGets < 0) {
+    if (args == null || completionLatch == null || stats == null || numPosts < 0 || numGets < 0) {
       throw new IllegalArgumentException(
           "invalid arguments - args cannot be null, posts and gets cannot be negative");
     }
@@ -57,7 +62,7 @@ public class PhaseRunner implements Runnable {
     this.args = args;
     this.completionLatch = completionLatch;
     this.nextPhaseLatch = nextPhaseLatch;
-    this.badRequestCount = badRequestCount;
+    this.stats = stats;
 
     // Prevent null pointer errors if no next phase is given
     if (nextPhaseLatch == null) {
@@ -70,6 +75,10 @@ public class PhaseRunner implements Runnable {
 
     // Thread-safe random number generator for generating API calls
     this.rand = ThreadLocalRandom.current();
+
+    // Initialize array for all requests
+    this.singleRequestStatisticsArray = new SingleRequestStatistics[this.numPosts + this.numGets];
+    this.singleStatsCurrIndex = 0;
   }
 
   /**
@@ -112,6 +121,7 @@ public class PhaseRunner implements Runnable {
   public void run() {
     performPosts();
     performGets();
+    stats.addStatArray(singleRequestStatisticsArray);
     nextPhaseLatch.countDown();
     completionLatch.countDown();
   }
@@ -120,6 +130,8 @@ public class PhaseRunner implements Runnable {
    * Runs the POST requests required against the server.
    */
   private void performPosts() {
+    String reqType = "POST";
+
     // Set up reusable parts of a lift ride
     LiftRide liftRide = new LiftRide();
     liftRide.setResortID(args.getResort());
@@ -135,9 +147,21 @@ public class PhaseRunner implements Runnable {
 
       // Attempt request
       try {
-        skiersApiInstance.writeNewLiftRide(liftRide);
+        // Get response info and time it. Write stats to array.
+        long reqStart = System.currentTimeMillis();
+        ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
+
+        if (resp.getStatusCode() / 100 != 2) {
+          stats.getTotalBadRequests().getAndIncrement();
+          logger.error("Received bad response code: " + resp.getStatusCode()
+            + " from POST with " + liftRide.toString());
+        }
+
       } catch (ApiException e) {
-        badRequestCount.getAndIncrement();
+        stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"
             + Arrays.toString(e.getStackTrace()));
@@ -149,21 +173,42 @@ public class PhaseRunner implements Runnable {
    * Runs the GET requests required against the server.
    */
   private void performGets() {
+    String reqType = "GET";
+
     for (int i = 0; i < numGets; i++) {
       try {
-        // Don't need results at this time
-        skiersApiInstance.getSkierDayVertical(
+        // Get response info and time it. Write stats to array.
+        long reqStart = System.currentTimeMillis();
+        ApiResponse<SkierVertical> resp = skiersApiInstance.getSkierDayVerticalWithHttpInfo(
             args.getResort(),
             String.valueOf(args.getSkiDay()),
             nextSkierId()
         );
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
+
+        if (resp.getStatusCode() / 100 != 2) {
+          stats.getTotalBadRequests().getAndIncrement();
+          logger.error("Received bad response code: " + resp.getStatusCode()
+              + " from GET to skierDayVertical");
+        }
       } catch (ApiException e) {
-        badRequestCount.getAndIncrement();
+        stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"
             + Arrays.toString(e.getStackTrace()));
       }
     }
+  }
+
+  /**
+   * Adds the given stats to a storage array and ensures the correct index is used.
+   * @param stats the stats to store
+   */
+  private void appendStats(SingleRequestStatistics stats) {
+    singleRequestStatisticsArray[singleStatsCurrIndex] = stats;
+    singleStatsCurrIndex++;
   }
 
   private String nextSkierId() {
