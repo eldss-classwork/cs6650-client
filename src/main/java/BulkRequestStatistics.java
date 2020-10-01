@@ -215,7 +215,7 @@ public class BulkRequestStatistics {
    * @return the median latency
    */
   private long getMedianFromCountingArray(long[] arr, long numRequests) {
-    long middleRequest = numRequests / 2;  // approximate in some cases
+    long middleRequest = Math.round(numRequests / 2.0);  // approximate in some cases
     long currTotal = 0;
     for (int i = 0; i < arr.length; i++) {
       // Find the middle request bucket
@@ -235,7 +235,7 @@ public class BulkRequestStatistics {
    * @return the median latency
    */
   private long getP99FromCountingArray(long[] arr, long numRequests) {
-    long p99Request = (long) (numRequests * 0.99);  // approximate for decimal values
+    long p99Request = Math.round(numRequests * 0.99);  // approximate for decimal values
     long currTotal = numRequests;
     for (int i = arr.length-1; i >= 0; i--) {
       // Find the bucket of the p99 request

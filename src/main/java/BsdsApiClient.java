@@ -147,8 +147,7 @@ public class BsdsApiClient {
     // Write individual request stats to csv in separate thread
     Runnable writeCsvR = () -> {
       try {
-        String csvFileName = "request-stats.csv";
-        stats.buildStatsCsv(csvFileName);
+        stats.buildStatsCsv(arguments.getCsvFilename());
       } catch (IOException e) {
         String msg = "Problem writing request statistics CSV: ";
         logger.error(msg + e.getMessage()

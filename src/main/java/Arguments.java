@@ -16,18 +16,20 @@ public class Arguments {
   final private int dayLengthMinutes = 420; // stored here because potentially customizable in future
   final private String resort;
   final private String hostAddress;
+  final private String csvFilename;
 
   /**
    * Private constructor for use with factory methods.
    */
   private Arguments(int maxThreads, int numSkiers, int numSkiLifts, int skiDay,
-      String resort, String hostAddress) {
+      String resort, String hostAddress, String csvFilename) {
     this.maxThreads = maxThreads;
     this.numSkiers = numSkiers;
     this.numSkiLifts = numSkiLifts;
     this.skiDay = skiDay;
     this.resort = resort;
     this.hostAddress = hostAddress;
+    this.csvFilename = csvFilename;
   }
 
   /**
@@ -39,6 +41,7 @@ public class Arguments {
    *   - skiDay (default: 1, min: 1, max: 366)
    *   - resort: String
    *   - hostAddress: String
+   *   - csvFilename: String
    * maxThreads, resortId and hostAddr are required.
    * @param fileName Path to the properties file
    * @return an Arguments instance with the specified properties
@@ -80,7 +83,7 @@ public class Arguments {
 
     // Final value vars
     int maxThreads, numSkiers, numSkiLifts, skiDay;
-    String resort, hostAddress;
+    String resort, hostAddress, csvFilename;
 
     // Defaults and property names
     String skiersDefault = "50000";
@@ -88,6 +91,7 @@ public class Arguments {
     String dayDefault = "1";
     String resortName = "resort";
     String hostAddressName = "hostAddress";
+    String csvFilenameName = "csvFilename";
     String threadsName = "maxThreads";
     String skiersName = "numSkiers";
     String liftsName = "numSkiLifts";
@@ -100,6 +104,9 @@ public class Arguments {
     if (resort == null || hostAddress == null || maxThreadsRaw == null) {
       throw new IllegalArgumentException("properties file missing required fields");
     }
+
+    // Get non-required csv filename
+    csvFilename = props.getProperty(csvFilenameName);
 
     // Get and convert numerical fields
     try {
@@ -138,7 +145,7 @@ public class Arguments {
     }
 
     // Finally we can create an Arguments instance
-    return new Arguments(maxThreads, numSkiers, numSkiLifts, skiDay, resort, hostAddress);
+    return new Arguments(maxThreads, numSkiers, numSkiLifts, skiDay, resort, hostAddress, csvFilename);
   }
 
   public int getMaxThreads() {
@@ -167,6 +174,10 @@ public class Arguments {
 
   public String getHostAddress() {
     return hostAddress;
+  }
+
+  public String getCsvFilename() {
+    return this.csvFilename;
   }
 
   @Override
