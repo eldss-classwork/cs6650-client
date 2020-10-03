@@ -16,7 +16,6 @@ import org.apache.logging.log4j.Logger;
  * https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
  */
 public class PhaseRunner implements Runnable {
-  // TODO: Add another field for the BulkRequestStatistics object
 
   // Limited logging performed here due to high execution volume
   private static final Logger logger = LogManager.getLogger(PhaseRunner.class);

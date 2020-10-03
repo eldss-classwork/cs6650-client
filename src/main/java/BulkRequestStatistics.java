@@ -8,6 +8,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Stores all statistics gathered in the client and provides methods to
+ * calculate further information from the raw stats.
+ */
 public class BulkRequestStatistics {
 
   public static final int MILLISECS_PER_SEC = 1000;
@@ -40,8 +44,6 @@ public class BulkRequestStatistics {
   public synchronized void addToStatArray(SingleRequestStatistics[] array) {
     singleStatsArrays.add(array);
   }
-
-
 
   /**
    * Creates a CSV file with statistics from every request in a list of SingleRequestStatistics
