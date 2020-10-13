@@ -68,6 +68,7 @@ public class BsdsApiClient {
     phase1.start();
     phase2Latch.await();
 
+
     /*
      * =====================================================================
      * Phase two of the client process. Peak.
@@ -194,6 +195,7 @@ public class BsdsApiClient {
     CountDownLatch completionLatch = new CountDownLatch(numThreads);
     int skierIdStart = 1;
     int skierIdEnd = skiersPerThread;
+
     for (int i = 0; i < numThreads; i++) {
       // Ensure last thread does not have too many skiers
       if (i == numThreads - 1) {

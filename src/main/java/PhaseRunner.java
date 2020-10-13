@@ -191,8 +191,8 @@ public class PhaseRunner implements Runnable {
         long latency = reqEnd - reqStart;
         appendStats(new SingleRequestStatistics(reqType, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
-        System.err.println("API error: " + e.getMessage());
-        logger.error("API error: " + e.getMessage() + "\n"
+        System.err.println("API error: " + e.getCode() + " " + e.getResponseBody());
+        logger.error("API error: " + e.getCode() + " " + e.getResponseBody() + "\n"
             + Arrays.toString(e.getStackTrace()));
       }
     }
@@ -216,6 +216,7 @@ public class PhaseRunner implements Runnable {
   }
 
   private String nextLift() {
-    return String.valueOf(rand.nextInt(args.getNumSkiLifts()));
+    // Values are increased by 1 in order to line up with 1-indexed lift IDs
+    return String.valueOf(rand.nextInt(1, args.getNumSkiLifts() + 1));
   }
 }

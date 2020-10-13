@@ -36,7 +36,7 @@ public class Arguments {
    * Creates an Arguments instance from a properties file.
    * Available properties:
    *   - maxThreads (min:4, max: 256)
-   *   - numSkiers (default: 50000, min: 0)
+   *   - numSkiers (default: 50000, min: 1, max: 50000)
    *   - numSkiLifts (default: 40, min: 5, max:60)
    *   - skiDay (default: 1, min: 1, max: 366)
    *   - resort: String
@@ -128,7 +128,8 @@ public class Arguments {
     // Validate numerical fields
     // Check separately for better error messages
     boolean threadsCondition = (maxThreads >= 4 && maxThreads <= 256);
-    boolean skiersCondition = (numSkiers >= 0);
+    // Upper limit can only change if more skiers are added to the database
+    boolean skiersCondition = (numSkiers > 0 && numSkiers <= 50000);
     boolean liftsCondition = (numSkiLifts >= 5 && numSkiLifts <= 60);
     boolean dayCondition = (skiDay >= 1 && skiDay <= 366);
     if (!threadsCondition) {
