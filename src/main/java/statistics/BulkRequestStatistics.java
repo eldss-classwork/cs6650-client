@@ -6,6 +6,8 @@ import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,14 +20,14 @@ public class BulkRequestStatistics {
 
   public static final int MILLISECS_PER_SEC = 1000;
 
+  private static final Logger logger = LogManager.getLogger(BulkRequestStatistics.class);
+
   private final String POST = "POST";
   private final String GET = "GET";
-  private static final Logger logger = LogManager.getLogger(BulkRequestStatistics.class);
 
   private AtomicInteger totalRequests = new AtomicInteger();
   private AtomicInteger totalBadRequests = new AtomicInteger();
-  private double meanPostTime;
-  private double meanGetTime;
+  private Map<String, Double> avgLatencyByPath;
   private long medianPostTime;
   private long medianGetTime;
   private long maxPostTime = -1;  // Initialized for assertion in median calculation
@@ -34,6 +36,12 @@ public class BulkRequestStatistics {
   private long p99GetTime;
   private long wallStart;
   private long wallStop;
+
+  private CsvStatsReader reader;
+
+  public BulkRequestStatistics(String filePathStr) {
+    this.reader = new CsvStatsReader(filePathStr);
+  }
 
   // List of references to arrays that contain raw stats from the requests of individual
   // threads of PhaseRunners
@@ -110,7 +118,15 @@ public class BulkRequestStatistics {
    */
   public void performFinalCalcs() throws InterruptedException {
     // Set up work to be done
-    Runnable meanR = this::calculateMeanLatencies;
+    Runnable meanR = () -> {
+      try {
+        this.avgLatencyByPath = reader.calculateMeanLatencies();
+      } catch (IOException | NumberFormatException e) {
+        String msg = "problem during execution: " + e.getMessage();
+        logger.error(msg);
+        System.err.println(msg);
+      }
+    };
     Runnable maxAndP99R = () -> {
       // Max has to come before
       caclulateMaxLatencies();
@@ -126,31 +142,6 @@ public class BulkRequestStatistics {
     // Let work finish
     meanT.join();
     maxAndP99T.join();
-  }
-
-  /**
-   * Calculates the mean latency for each request type.
-   */
-  private void calculateMeanLatencies() {
-    long postSum, postCount;
-    long getSum, getCount;
-    postSum = postCount = getSum = getCount = 0;
-
-    // Get needed values to calculate means
-    for (SingleRequestStatistics[] arr : singleStatsArrays) {
-      for (SingleRequestStatistics statistics : arr) {
-        if (statistics.getRequestType().equals(POST)) {
-          postSum += statistics.getLatency();
-          postCount++;
-        } else if (statistics.getRequestType().equals(GET)) {
-          getSum += statistics.getLatency();
-          getCount++;
-        }
-      }
-    }
-
-    this.meanPostTime = (double) postSum / postCount;
-    this.meanGetTime = (double) getSum / getCount;
   }
 
   /**
@@ -276,35 +267,54 @@ public class BulkRequestStatistics {
   @Override
   public String toString() {
     return String.format("Execution Statistics:\n"
-            + "\tTotal Requests: %d\n"
-            + "\tBad Requests: %d\n"
-            + "\tWall Time: %.2f seconds\n"
-            + "\tTotal Throughput: %.2f requests/second\n"
-            + "\tSuccess Throughput: %.2f requests/second\n"
-            + "\tPOST Latencies (milliseconds):\n"
-            + "\t\tMean: %.2f\n"
-            + "\t\tMedian: %d\n"
-            + "\t\t99th Percentile: %d\n"
-            + "\t\tMax: %d\n"
-            + "\tGET Latencies (millisconds):\n"
-            + "\t\tMean: %.2f\n"
-            + "\t\tMedian: %d\n"
-            + "\t\t99th Percentile: %d\n"
-            + "\t\tMax: %d\n"
+            + "Total Requests: %d\n"
+            + "Bad Requests: %d\n"
+            + "Wall Time: %.2f seconds\n"
+            + "Total Throughput: %.2f requests/second\n"
+            + "Success Throughput: %.2f requests/second\n"
+            + "POST Latencies (milliseconds):\n"
+            + "\tMedian: %d\n"
+            + "\t99th Percentile: %d\n"
+            + "\tMax: %d\n"
+            + "GET Latencies (millisconds):\n"
+            + "\tMedian: %d\n"
+            + "\t99th Percentile: %d\n"
+            + "\tMax: %d\n"
             , totalRequests.get()
             , totalBadRequests.get()
             , getWallTimeSecs()
             , getThroughputPerSec()
             , getGoodThroughputPerSec()
-            , meanPostTime
             , medianPostTime
             , p99PostTime
             , maxPostTime
-            , meanGetTime
             , medianGetTime
             , p99GetTime
             , maxGetTime
-    );
+    ) + "\n" + statsPerPathToString();
+  }
+
+  /**
+   * Provides statistics for each path as a string.
+   * @return a string of statistics for each path
+   */
+  private String statsPerPathToString() {
+    // Same keys for every map
+    Set<String> keys = this.avgLatencyByPath.keySet();
+    StringBuilder builder = new StringBuilder();
+    for (String key : keys) {
+      // Section start
+      builder.append("Latencies for ");
+      builder.append(key);
+      builder.append(" (milliseconds):\n");
+
+      // Mean
+      builder.append("\tMean: ");
+      String mean = String.format("%.2f\n", this.avgLatencyByPath.get(key));
+      builder.append(mean);
+    }
+
+    return builder.toString();
   }
 
   public AtomicInteger getTotalRequests() {

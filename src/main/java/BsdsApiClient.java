@@ -6,7 +6,9 @@ import org.apache.logging.log4j.Logger;
 import statistics.BulkRequestStatistics;
 
 public class BsdsApiClient {
+
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
+  private static final int numPostsStd = 100;
 
   public static void main(String[] args) throws InterruptedException {
     infoLogAndPrint("Starting client...");
@@ -17,7 +19,7 @@ public class BsdsApiClient {
     try {
       propertyArgs = Arguments.fromPropertiesFile("arguments.properties");
     } catch (IOException e) {
-      System.out.println("Problem reading properties file, please try again: " + e.getMessage());;
+      System.out.println("Problem reading properties file, please try again: " + e.getMessage());
       System.exit(1);
     } catch (IllegalArgumentException e) {
       System.out.println("Invalid property found: " + e.getMessage());
@@ -25,7 +27,7 @@ public class BsdsApiClient {
     }
     final Arguments arguments = propertyArgs;
 
-    final BulkRequestStatistics stats = new BulkRequestStatistics();
+    final BulkRequestStatistics stats = new BulkRequestStatistics(arguments.getCsvFilename());
 
     // Track total execution time
     // Keeping setup of first phase because all others will be included
@@ -49,14 +51,13 @@ public class BsdsApiClient {
     Runnable run1 = () -> {
       int startTime = 1;
       int endTime = 90;
-      int numPostRequestsPerThread = 100;
       int numGetRequestsPerThread = 5;
       executePhase(
           arguments,
           numThreadsP1,
           startTime,
           endTime,
-          numPostRequestsPerThread,
+          numPostsStd,
           numGetRequestsPerThread,
           phase2Latch,
           stats
@@ -85,14 +86,13 @@ public class BsdsApiClient {
     Runnable run2 = () -> {
       int startTime = 91;
       int endTime = 360;
-      int numPostRequestsPerThread = 100;
       int numGetRequestsPerThread = 5;
       executePhase(
           arguments,
           numThreadsP2,
           startTime,
           endTime,
-          numPostRequestsPerThread,
+          numPostsStd,
           numGetRequestsPerThread,
           phase3Latch,
           stats
@@ -118,14 +118,13 @@ public class BsdsApiClient {
     Runnable run3 = () -> {
       int startTime = 361;
       int endTime = 420;
-      int numPostRequestsPerThread = 100;
       int numGetRequestsPerThread = 10;
       executePhase(
           arguments,
           numThreadsP3,
           startTime,
           endTime,
-          numPostRequestsPerThread,
+          numPostsStd,
           numGetRequestsPerThread,
           new CountDownLatch(0),
           stats
@@ -155,28 +154,29 @@ public class BsdsApiClient {
         System.err.println(msg + "See logs for details");
       }
     };
+    // TODO: Write to queue after each thread. Will be complete by now.
     Thread writeCsvT = new Thread(writeCsvR);
     writeCsvT.start();
+    writeCsvT.join();
 
     // Final stats
     stats.performFinalCalcs();
     infoLogAndPrint(stats.toString());
 
-    // Ensure CSV thread completes
-    writeCsvT.join();
   }
 
   /**
    * Executes one phase of the client process.
-   * @param arguments arguments provided to the client
-   * @param numThreads number of threads to create
-   * @param startTime start of time range for this phase
-   * @param endTime end of time range for this phase
+   *
+   * @param arguments                arguments provided to the client
+   * @param numThreads               number of threads to create
+   * @param startTime                start of time range for this phase
+   * @param endTime                  end of time range for this phase
    * @param numPostRequestsPerThread number of POST requests to make per thread
-   * @param numGetRequestsPerThread number of GET requests to make per thread
-   * @param nextPhaseLatch a CountDownLatch to determine when the next phase can start
-   *                       (null or set to 0 if there is no next phase)
-   * @param stats object to collect statistics from
+   * @param numGetRequestsPerThread  number of GET requests to make per thread
+   * @param nextPhaseLatch           a CountDownLatch to determine when the next phase can start
+   *                                 (null or set to 0 if there is no next phase)
+   * @param stats                    object to collect statistics from
    */
   private static void executePhase(
       Arguments arguments,
@@ -186,8 +186,7 @@ public class BsdsApiClient {
       int numPostRequestsPerThread,
       int numGetRequestsPerThread,
       CountDownLatch nextPhaseLatch,
-      BulkRequestStatistics stats)
-  {
+      BulkRequestStatistics stats) {
     // Set-up vars given in spec
     int skiersPerThread = arguments.getNumSkiers() / numThreads;
 
@@ -237,6 +236,7 @@ public class BsdsApiClient {
 
   /**
    * Produces an INFO level log and prints to System.out for user friendly readability
+   *
    * @param msg A message to output
    */
   static private void infoLogAndPrint(String msg) {
