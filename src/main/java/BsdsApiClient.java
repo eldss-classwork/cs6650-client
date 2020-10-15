@@ -10,6 +10,7 @@ public class BsdsApiClient {
 
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
   private static final int numPostsStd = 100;
+  private static final int numGetsPerPathStd = 5;
 
   public static void main(String[] args) throws InterruptedException {
     infoLogAndPrint("Starting client...");
@@ -54,14 +55,13 @@ public class BsdsApiClient {
     Runnable run1 = () -> {
       int startTime = 1;
       int endTime = 90;
-      int numGetRequestsPerThread = 5;
       executePhase(
           arguments,
           numThreadsP1,
           startTime,
           endTime,
           numPostsStd,
-          numGetRequestsPerThread,
+          numGetsPerPathStd,
           phase2Latch,
           stats
       );
@@ -89,14 +89,13 @@ public class BsdsApiClient {
     Runnable run2 = () -> {
       int startTime = 91;
       int endTime = 360;
-      int numGetRequestsPerThread = 5;
       executePhase(
           arguments,
           numThreadsP2,
           startTime,
           endTime,
           numPostsStd,
-          numGetRequestsPerThread,
+          numGetsPerPathStd,
           phase3Latch,
           stats
       );
@@ -121,14 +120,14 @@ public class BsdsApiClient {
     Runnable run3 = () -> {
       int startTime = 361;
       int endTime = 420;
-      int numGetRequestsPerThread = 10;
+      int numGetRequestsPerPathPerThread = numGetsPerPathStd * 2;
       executePhase(
           arguments,
           numThreadsP3,
           startTime,
           endTime,
           numPostsStd,
-          numGetRequestsPerThread,
+          numGetRequestsPerPathPerThread,
           new CountDownLatch(0),
           stats
       );
@@ -152,7 +151,7 @@ public class BsdsApiClient {
     writerLoop.join();
 
     // Final stats
-    System.out.println("Calculating statistics\n");
+    System.out.println("Calculating...\n");
     stats.performFinalCalcs();
     infoLogAndPrint(stats.toString());
 
@@ -223,7 +222,7 @@ public class BsdsApiClient {
 
     // Calculate total requests completed
     // Done here for performance reasons (no waiting for adds on each thread)
-    int numPhaseRequests = (numPostRequestsPerThread + numGetRequestsPerThread) * numThreads;
+    int numPhaseRequests = (numPostRequestsPerThread + (numGetRequestsPerThread * 2)) * numThreads;
     stats.getTotalRequests().getAndAdd(numPhaseRequests);
   }
 

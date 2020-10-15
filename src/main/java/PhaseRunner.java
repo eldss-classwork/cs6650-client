@@ -4,6 +4,7 @@ import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
 import io.swagger.client.model.SkierVertical;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.logging.log4j.LogManager;
@@ -13,9 +14,8 @@ import statistics.SingleRequestStatistics;
 
 /**
  * PhaseRunner uses the client SDK to call the server API in an automated way.
- *
- * Source of truth for how phases are run is found here:
- * https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
+ * <p>
+ * Source of truth for how phases are run is found here: https://gortonator.github.io/bsds-6650/assignments-2020/Assignment-1
  */
 public class PhaseRunner implements Runnable {
 
@@ -40,9 +40,10 @@ public class PhaseRunner implements Runnable {
 
   /**
    * Basic constructor for a PhaseRunner.
+   * <p>
+   * To aid in readability, set skier and time ranges in helper methods, setSkierIdRange and
+   * setTimeRange. These fields will be null if not set.
    *
-   * To aid in readability, set skier and time ranges in helper methods,
-   * setSkierIdRange and setTimeRange. These fields will be null if not set.
    * @throws IllegalArgumentException if args is null or either numPosts or numGets is negative
    */
   public PhaseRunner(
@@ -52,8 +53,7 @@ public class PhaseRunner implements Runnable {
       CountDownLatch completionLatch,
       BulkRequestStatistics stats,
       CountDownLatch nextPhaseLatch)
-      throws IllegalArgumentException
-  {
+      throws IllegalArgumentException {
     if (args == null || completionLatch == null || stats == null || numPosts < 0 || numGets < 0) {
       throw new IllegalArgumentException(
           "invalid arguments - args cannot be null, posts and gets cannot be negative");
@@ -78,13 +78,15 @@ public class PhaseRunner implements Runnable {
     this.rand = ThreadLocalRandom.current();
 
     // Initialize array for all requests
-    this.singleRequestStatisticsArray = new SingleRequestStatistics[this.numPosts + this.numGets];
+    this.singleRequestStatisticsArray = new SingleRequestStatistics[this.numPosts + (this.numGets
+        * 2)];  // 2x for Gets because there are two Get paths
     this.singleStatsCurrIndex = 0;
   }
 
   /**
    * Sets the skier ID range (inclusive) for this runner.
-   * @param low low bound
+   *
+   * @param low  low bound
    * @param high high bound
    * @throws IllegalArgumentException if invalid bounds are given
    */
@@ -102,7 +104,8 @@ public class PhaseRunner implements Runnable {
 
   /**
    * Sets the time range (inclusive) for this runner.
-   * @param low low bound
+   *
+   * @param low  low bound
    * @param high high bound
    * @throws IllegalArgumentException if invalid bounds are given
    */
@@ -154,9 +157,10 @@ public class PhaseRunner implements Runnable {
         ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
+        appendStats(
+            new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
 
-      // Includes 4XX/5XX responses
+        // Includes 4XX/5XX responses
       } catch (ApiException e) {
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
@@ -173,8 +177,13 @@ public class PhaseRunner implements Runnable {
    * Runs the GET requests required against the server.
    */
   private void performGets() {
+    performGetsVertByDayAndResort();
+    performGetsVertByResort();
+  }
+
+  private void performGetsVertByDayAndResort() {
     String reqType = "GET";
-    String path = "/skiers/{resortID}/days/{dayID}/skiers/{skierID}"; // TODO: Update when sencond added
+    String path = "/skiers/{resortID}/days/{dayID}/skiers/{skierID}";
 
     for (int i = 0; i < numGets; i++) {
       long reqStart = System.currentTimeMillis();
@@ -187,14 +196,51 @@ public class PhaseRunner implements Runnable {
         );
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
+        appendStats(
+            new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
 
-      // Includes 4XX/5XX responses
+        // Includes 4XX/5XX responses
       } catch (ApiException e) {
+        // Record stats
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
         appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
+
+        // Notify of error
+        System.err.println("API error: " + e.getCode() + " " + e.getResponseBody());
+        logger.error("API error: " + e.getCode() + " " + e.getResponseBody() + "\n"
+            + Arrays.toString(e.getStackTrace()));
+      }
+    }
+  }
+
+  private void performGetsVertByResort() {
+    String reqType = "GET";
+    String path = "/skiers/{skierID}/vertical";
+
+    for (int i = 0; i < numGets; i++) {
+      long reqStart = System.currentTimeMillis();
+      try {
+        // Get response info and time it. Write stats to array.
+        ApiResponse<SkierVertical> resp = skiersApiInstance.getSkierResortTotalsWithHttpInfo(
+            nextSkierId(),
+            Collections.singletonList(args.getResort())
+        );
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(
+            new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
+
+        // Includes 4XX/5XX responses
+      } catch (ApiException e) {
+        // Record stats
+        long reqEnd = System.currentTimeMillis();
+        long latency = reqEnd - reqStart;
+        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, e.getCode()));
+        stats.getTotalBadRequests().getAndIncrement();
+
+        // Notify of error
         System.err.println("API error: " + e.getCode() + " " + e.getResponseBody());
         logger.error("API error: " + e.getCode() + " " + e.getResponseBody() + "\n"
             + Arrays.toString(e.getStackTrace()));
@@ -204,6 +250,7 @@ public class PhaseRunner implements Runnable {
 
   /**
    * Adds the given stats to a storage array and ensures the correct index is used.
+   *
    * @param stats the stats to store
    */
   private void appendStats(SingleRequestStatistics stats) {
