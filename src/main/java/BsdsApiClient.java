@@ -4,6 +4,7 @@ import java.util.concurrent.CountDownLatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import statistics.BulkRequestStatistics;
+import statistics.SingleRequestStatistics;
 
 public class BsdsApiClient {
 
@@ -29,8 +30,10 @@ public class BsdsApiClient {
 
     final BulkRequestStatistics stats = new BulkRequestStatistics(arguments.getCsvFilename());
 
+    Thread writerLoop = stats.startStatsToCsvListener();
+
     // Track total execution time
-    // Keeping setup of first phase because all others will be included
+    // Timing setup of first phase because all others will be included
     stats.startWallTimer();
 
     /*
@@ -140,26 +143,16 @@ public class BsdsApiClient {
     phase2.join();
     phase3.join();
     stats.stopWallTimer();
+
     infoLogAndPrint("All phases complete");
     System.out.println();  // newline for terminal user readability
 
-    // Write individual request stats to csv in separate thread
-    Runnable writeCsvR = () -> {
-      try {
-        stats.buildStatsCsv(arguments.getCsvFilename());
-      } catch (IOException e) {
-        String msg = "Problem writing request statistics CSV: ";
-        logger.error(msg + e.getMessage()
-            + "\n" + Arrays.toString(e.getStackTrace()));
-        System.err.println(msg + "See logs for details");
-      }
-    };
-    // TODO: Write to queue after each thread. Will be complete by now.
-    Thread writeCsvT = new Thread(writeCsvR);
-    writeCsvT.start();
-    writeCsvT.join();
+    // Ensure final stats get written to CSV
+    stats.pushDataToWriter(new SingleRequestStatistics[]{});  // empty signals stop
+    writerLoop.join();
 
     // Final stats
+    System.out.println("Calculating statistics\n");
     stats.performFinalCalcs();
     infoLogAndPrint(stats.toString());
 

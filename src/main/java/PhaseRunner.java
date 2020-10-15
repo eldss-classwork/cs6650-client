@@ -122,7 +122,7 @@ public class PhaseRunner implements Runnable {
   public void run() {
     performPosts();
     performGets();
-    stats.addToStatArray(singleRequestStatisticsArray);
+    stats.pushDataToWriter(singleRequestStatisticsArray);
     nextPhaseLatch.countDown();
     completionLatch.countDown();
   }

@@ -1,29 +1,27 @@
 package statistics;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Stores data gathered from the client and calculates descriptive statistics once
- * all request threads have finished.
+ * Stores data gathered from the client and calculates descriptive statistics once all request
+ * threads have finished.
  */
 public class BulkRequestStatistics {
 
   public static final int MILLISECS_PER_SEC = 1000;
-
   private static final Logger logger = LogManager.getLogger(BulkRequestStatistics.class);
 
   private AtomicInteger totalRequests = new AtomicInteger();
   private AtomicInteger totalBadRequests = new AtomicInteger();
+  private BlockingQueue<SingleRequestStatistics[]> writeQueue = new LinkedBlockingQueue<>();
+
   private Map<String, Double> avgLatencyByPath;
   private Map<String, Integer> maxLatencyByPath;
   private Map<String, Integer> medianLatencyByPath;
@@ -36,79 +34,30 @@ public class BulkRequestStatistics {
 
   public BulkRequestStatistics(String filePathStr) {
     this.reader = new CsvStatsReader(filePathStr);
-    this.writer = new CsvStatsWriter(filePathStr);
-  }
-
-  // List of references to arrays that contain raw stats from the requests of individual
-  // threads of PhaseRunners
-  private List<SingleRequestStatistics[]> singleStatsArrays = new LinkedList<>();
-
-  /**
-   * Adds the given array reference to a linked list synchronously.
-   *
-   * @param array an array of stats
-   */
-  public synchronized void addToStatArray(SingleRequestStatistics[] array) {
-    singleStatsArrays.add(array);
+    this.writer = new CsvStatsWriter(filePathStr, writeQueue);
   }
 
   /**
-   * Creates a CSV file with statistics from every request in a list of
-   * statistics.SingleRequestStatistics arrays. If writing fails, prints a message to stderr and
-   * logs it.
+   * Opens a CSV file for writing and starts a listener waiting for data from each request thread.
    *
-   * @param filename the desired filename
+   * @return the listener thread handle
    */
-  public void buildStatsCsv(String filename) throws IOException {
-    final File csvOutputFile = new File(filename);
+  public Thread startStatsToCsvListener() {
+    writer.initCsvFile();
+    return writer.startWriteLoop();
+  }
 
-    // Ensure any old file is overwritten
-    if (csvOutputFile.exists()) {
-      // First try deleting the old file, then try creating a new one
-      boolean deleted = csvOutputFile.delete();
-      boolean created = csvOutputFile.createNewFile();
-      if (!(deleted && created)) {
-        String msg = "Problem overwriting existing CSV file";
-        logger.error(msg);
-        System.err.println(msg);
-        return;
-      }
+  /**
+   * Alias for putting data into the blocking queue.
+   *
+   * @param stats an array of stats to include
+   */
+  public void pushDataToWriter(SingleRequestStatistics[] stats) {
+    try {
+      writeQueue.put(stats);
+    } catch (InterruptedException e) {
+      handleError(e);
     }
-
-    final String headers = "RequestType,Path,StartTimestamp(ms),Latency(ms),ResponseCode";
-    try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
-      // Add the headers
-      pw.println(headers);
-
-      // Add the data
-      for (SingleRequestStatistics[] arr : singleStatsArrays) {
-        for (SingleRequestStatistics statistics : arr) {
-          pw.println(buildCsvLine(statistics));
-        }
-      }
-    } catch (IOException e) {
-      String msg = "Problem writing csv file: ";
-      logger.error(msg + e.getMessage()
-          + "\n" + Arrays.toString(e.getStackTrace()));
-      System.err.println(msg + "See log output for details");
-    }
-  }
-
-  /**
-   * Creates a one line string in CSV format from a statistics.SingleRequestStatistics object.
-   *
-   * @param singleStats the stats to make a string
-   * @return A string with the stats in CSV format
-   */
-  private String buildCsvLine(SingleRequestStatistics singleStats) {
-    String type = singleStats.getRequestType();
-    String path = singleStats.getPath();
-    String start = String.valueOf(singleStats.getStartTime());
-    String latency = String.valueOf(singleStats.getLatency());
-    String code = String.valueOf(singleStats.getResponseCode());
-
-    String[] data = new String[]{type, path, start, latency, code};
-    return String.join(",", data);
   }
 
   /**
