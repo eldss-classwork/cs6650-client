@@ -9,8 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Provides methods to calculate statistics from the CSV request file created
- * during client execution.
+ * Provides methods to calculate statistics from the CSV request file created during client
+ * execution.
  */
 public class CsvStatsReader {
 
@@ -20,6 +20,7 @@ public class CsvStatsReader {
   private final int csvColIndexTimestamp = 2;
   private final int csvColIndexLatency = 3;
   private final int csvColIndexCode = 4;
+  private final String SEP = ",";
 
   private Path filePath;
 
@@ -34,16 +35,15 @@ public class CsvStatsReader {
     // Stores "method path" -> [sum, count]
     Map<String, Long[]> tempCounter = new HashMap<>();
     Map<String, Double> avgByPath = new HashMap<>();
-    String sep = ",";
 
-    BufferedReader reader = Files.newBufferedReader(this.filePath);
+    BufferedReader reader = Files.newBufferedReader(filePath);
     String line = reader.readLine(); // Ignore column headers
     line = reader.readLine();
     while (line != null) {
       // Get vals from line
-      String[] cols = line.split(sep);
-      String key = cols[csvColIndexMethod] + " " + cols[csvColIndexPath];
-      long nextLatency = Long.parseLong(cols[csvColIndexLatency]);
+      String[] cols = line.split(SEP);
+      String key = makeKey(cols);
+      long nextLatency = Long.parseLong(getLatency(cols));
 
       // Update map
       Long[] currNums = tempCounter.getOrDefault(key, new Long[]{(long) 0, (long) 0});
@@ -71,5 +71,50 @@ public class CsvStatsReader {
     }
 
     return avgByPath;
+  }
+
+  /**
+   * Calculates the maximum latency for each request type from a CSV.
+   */
+  public Map<String, Integer> calculateMaxLatencies() throws IOException, NumberFormatException {
+    // Stores "method path" -> max
+    Map<String, Integer> maxByPath = new HashMap<>();
+
+    BufferedReader reader = Files.newBufferedReader(filePath);
+    String line = reader.readLine(); // Ignore column headers
+    line = reader.readLine();
+    while (line != null) {
+      // Parse data
+      String[] cols = line.split(SEP);
+      String key = makeKey(cols);
+      int latency = Integer.parseInt(getLatency(cols));
+
+      // Check max and update
+      Integer max = maxByPath.getOrDefault(key, 0);
+      if (latency > max) {
+        maxByPath.put(key, latency);
+      }
+
+      line = reader.readLine();
+    }
+
+    return maxByPath;
+  }
+
+  /**
+   * Builds a key out the request method and path in the form of "method path" as a String.
+   *
+   * @param cols a line of CSV data, split into an array
+   * @return the String key
+   */
+  private String makeKey(String[] cols) {
+    return cols[csvColIndexMethod] + " " + cols[csvColIndexPath];
+  }
+
+  /**
+   * Convenience method for getting the latency column
+   */
+  private String getLatency(String[] cols) {
+    return cols[csvColIndexLatency];
   }
 }

@@ -28,6 +28,7 @@ public class BulkRequestStatistics {
   private AtomicInteger totalRequests = new AtomicInteger();
   private AtomicInteger totalBadRequests = new AtomicInteger();
   private Map<String, Double> avgLatencyByPath;
+  private Map<String, Integer> maxLatencyByPath;
   private long medianPostTime;
   private long medianGetTime;
   private long maxPostTime = -1;  // Initialized for assertion in median calculation
@@ -117,16 +118,6 @@ public class BulkRequestStatistics {
    * @throws InterruptedException if threads are interrupted
    */
   public void performFinalCalcs() throws InterruptedException {
-    // Set up work to be done
-    Runnable meanR = () -> {
-      try {
-        this.avgLatencyByPath = reader.calculateMeanLatencies();
-      } catch (IOException | NumberFormatException e) {
-        String msg = "problem during execution: " + e.getMessage();
-        logger.error(msg);
-        System.err.println(msg);
-      }
-    };
     Runnable maxAndP99R = () -> {
       // Max has to come before
       caclulateMaxLatencies();
@@ -134,14 +125,62 @@ public class BulkRequestStatistics {
     };
 
     // Create and run threads
-    Thread meanT = new Thread(meanR);
     Thread maxAndP99T = new Thread(maxAndP99R);
-    meanT.start();
     maxAndP99T.start();
 
+    Thread mean = launchMeanCalculation();
+    Thread max = launchMaxCalculation();
+
     // Let work finish
-    meanT.join();
     maxAndP99T.join();
+    mean.join();
+    max.join();
+  }
+
+  /**
+   * Launches a mean latency calculation in a new thread.
+   * @return the thread handle
+   */
+  private Thread launchMeanCalculation() {
+    // Set up work to be done
+    Runnable work = () -> {
+      try {
+        this.avgLatencyByPath = reader.calculateMeanLatencies();
+      } catch (IOException | NumberFormatException e) {
+        handleError(e);
+      }
+    };
+    Thread thread = new Thread(work);
+    thread.start();
+    return thread;
+  }
+
+  /**
+   * Launches a max latency calculation in a new thread.
+   * @return the thread handle
+   */
+  private Thread launchMaxCalculation() {
+    // Set up work to be done
+    Runnable work = () -> {
+      try {
+        this.maxLatencyByPath = reader.calculateMaxLatencies();
+      } catch (IOException | NumberFormatException e) {
+        handleError(e);
+      }
+    };
+    Thread thread = new Thread(work);
+    thread.start();
+    return thread;
+  }
+
+  /**
+   * Logs and prints an error
+   * @param e the exception
+   */
+  private void handleError(Exception e) {
+    String msg = "problem during execution: " + e.getMessage();
+    logger.error(msg);
+    System.err.println(msg);
   }
 
   /**
@@ -304,14 +343,24 @@ public class BulkRequestStatistics {
     StringBuilder builder = new StringBuilder();
     for (String key : keys) {
       // Section start
-      builder.append("Latencies for ");
+      builder.append("Latencies (ms) for ");
       builder.append(key);
-      builder.append(" (milliseconds):\n");
+      builder.append(":\n");
 
       // Mean
       builder.append("\tMean: ");
       String mean = String.format("%.2f\n", this.avgLatencyByPath.get(key));
       builder.append(mean);
+
+      // Median
+
+      // P99
+
+      // Max
+      builder.append("\tMax: ");
+      int max = this.maxLatencyByPath.get(key);
+      builder.append(max);
+      builder.append("\n");
     }
 
     return builder.toString();
