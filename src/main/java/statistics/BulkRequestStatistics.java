@@ -1,3 +1,5 @@
+package statistics;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -46,7 +48,7 @@ public class BulkRequestStatistics {
   }
 
   /**
-   * Creates a CSV file with statistics from every request in a list of SingleRequestStatistics
+   * Creates a CSV file with statistics from every request in a list of statistics.SingleRequestStatistics
    * arrays. If writing fails, prints a message to stderr and logs it.
    * @param filename the desired filename
    */
@@ -66,7 +68,7 @@ public class BulkRequestStatistics {
       }
     }
 
-    final String headers = "RequestType,StartTimestamp(ms),Latency(ms),ResponseCode";
+    final String headers = "RequestType,Path,StartTimestamp(ms),Latency(ms),ResponseCode";
     try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
       // Add the headers
       pw.println(headers);
@@ -86,17 +88,18 @@ public class BulkRequestStatistics {
   }
 
   /**
-   * Creates a one line string in CSV format from a SingleRequestStatistics object.
+   * Creates a one line string in CSV format from a statistics.SingleRequestStatistics object.
    * @param singleStats the stats to make a string
    * @return A string with the stats in CSV format
    */
   private String buildCsvLine(SingleRequestStatistics singleStats) {
     String type = singleStats.getRequestType();
+    String path = singleStats.getPath();
     String start = String.valueOf(singleStats.getStartTime());
     String latency = String.valueOf(singleStats.getLatency());
     String code = String.valueOf(singleStats.getResponseCode());
 
-    String[] data = new String[]{type, start, latency, code};
+    String[] data = new String[]{type, path, start, latency, code};
     return String.join(",", data);
   }
 

@@ -3,6 +3,7 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import statistics.BulkRequestStatistics;
 
 public class BsdsApiClient {
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
@@ -24,7 +25,6 @@ public class BsdsApiClient {
     }
     final Arguments arguments = propertyArgs;
 
-    // Statistics tracker
     final BulkRequestStatistics stats = new BulkRequestStatistics();
 
     // Track total execution time

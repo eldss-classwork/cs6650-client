@@ -8,6 +8,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import statistics.BulkRequestStatistics;
+import statistics.SingleRequestStatistics;
 
 /**
  * PhaseRunner uses the client SDK to call the server API in an automated way.
@@ -130,6 +132,7 @@ public class PhaseRunner implements Runnable {
    */
   private void performPosts() {
     String reqType = "POST";
+    String path = "/skiers/liftrides";
 
     // Set up reusable parts of a lift ride
     LiftRide liftRide = new LiftRide();
@@ -151,13 +154,13 @@ public class PhaseRunner implements Runnable {
         ApiResponse<Void> resp = skiersApiInstance.writeNewLiftRideWithHttpInfo(liftRide);
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
+        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
 
       // Includes 4XX/5XX responses
       } catch (ApiException e) {
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, e.getCode()));
+        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"
@@ -171,6 +174,7 @@ public class PhaseRunner implements Runnable {
    */
   private void performGets() {
     String reqType = "GET";
+    String path = "/skiers/{resortID}/days/{dayID}/skiers/{skierID}"; // TODO: Update when sencond added
 
     for (int i = 0; i < numGets; i++) {
       long reqStart = System.currentTimeMillis();
@@ -183,13 +187,13 @@ public class PhaseRunner implements Runnable {
         );
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, resp.getStatusCode()));
+        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, resp.getStatusCode()));
 
       // Includes 4XX/5XX responses
       } catch (ApiException e) {
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
-        appendStats(new SingleRequestStatistics(reqType, reqStart, latency, e.getCode()));
+        appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
         System.err.println("API error: " + e.getCode() + " " + e.getResponseBody());
         logger.error("API error: " + e.getCode() + " " + e.getResponseBody() + "\n"
