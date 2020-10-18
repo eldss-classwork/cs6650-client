@@ -162,10 +162,13 @@ public class PhaseRunner implements Runnable {
 
         // Includes 4XX/5XX responses
       } catch (ApiException e) {
+        // Get stats
         long reqEnd = System.currentTimeMillis();
         long latency = reqEnd - reqStart;
         appendStats(new SingleRequestStatistics(reqType, path, reqStart, latency, e.getCode()));
         stats.getTotalBadRequests().getAndIncrement();
+
+        // Notify of error
         System.err.println("API error: " + e.getMessage());
         logger.error("API error: " + e.getMessage() + "\n"
             + Arrays.toString(e.getStackTrace()));

@@ -140,6 +140,37 @@ public class CsvStatsReader {
   }
 
   /**
+   * Calculates the number of requests started during each second of program operation.
+   */
+  public long[] calculateNumRequestsByMin(long startTimestamp, long endTimestamp)
+      throws IOException, NumberFormatException {
+    double totalSecs = milliSecsToSecs(endTimestamp - startTimestamp);
+    int length = (int) Math.ceil(totalSecs);
+    long[] result = new long[length];
+    int timestampIndex = 2;
+
+    // Start reading file
+    BufferedReader reader = Files.newBufferedReader(filePath);
+    String line = reader.readLine(); // Ignore column headers
+    line = reader.readLine();
+    while (line != null) {
+      // Parse data
+      String[] cols = line.split(SEP);
+      long timeOfRequest = Long.parseLong(cols[timestampIndex]);
+
+      // Increment count on appropriate second
+      int secondBucket = (int) Math.floor(
+          milliSecsToSecs(timeOfRequest - startTimestamp)
+      );
+      result[secondBucket]++;
+
+      line = reader.readLine();
+    }
+
+    return result;
+  }
+
+  /**
    * Builds a latency counting array from a CSV file, given the max latencies in the file.
    *
    * @param pathsToMax a path to max latency map
@@ -262,5 +293,16 @@ public class CsvStatsReader {
       }
     }
     return sum;
+  }
+
+  /**
+   * Converts milliseconds to seconds
+   *
+   * @param milliseconds a value in milliseconds
+   * @return the value of milliseconds as seconds
+   */
+  private double milliSecsToSecs(long milliseconds) {
+    int millisecsPerSec = 1000;
+    return (double) milliseconds / millisecsPerSec;
   }
 }

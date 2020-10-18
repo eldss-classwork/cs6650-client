@@ -9,7 +9,7 @@ import statistics.SingleRequestStatistics;
 public class BsdsApiClient {
 
   private static final Logger logger = LogManager.getLogger(BsdsApiClient.class);
-  private static final int numPostsStd = 100;
+  private static final int numPostsStd = 1000;
   private static final int numGetsPerPathStd = 5;
 
   public static void main(String[] args) throws InterruptedException {

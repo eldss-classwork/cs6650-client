@@ -26,13 +26,17 @@ public class BulkRequestStatistics {
   private Map<String, Integer> maxLatencyByPath;
   private Map<String, Integer> medianLatencyByPath;
   private Map<String, Integer> p99LatencyByPath;
+  private long[] numRequestsByMin;
   private long wallStart;
   private long wallStop;
 
+  private String filePath;
   private CsvStatsReader reader;
   private CsvStatsWriter writer;
 
   public BulkRequestStatistics(String filePathStr) {
+    this.filePath = filePathStr;
+    filePathStr = filePathStr + ".csv";
     this.reader = new CsvStatsReader(filePathStr);
     this.writer = new CsvStatsWriter(filePathStr, writeQueue);
   }
@@ -69,6 +73,7 @@ public class BulkRequestStatistics {
   public void performFinalCalcs() throws InterruptedException {
     // Work that doesn't need a max latency value
     Thread mean = launchMeanCalculation();
+    Thread histData = launchNumRequestsByMin();
 
     // Max latency calculation
     try {
@@ -83,8 +88,13 @@ public class BulkRequestStatistics {
 
     // Let work finish
     mean.join();
+    histData.join();
     median.join();
     p99.join();
+
+    // Output the histogram data
+    String path = this.filePath + "-req-start-hist-data.csv";
+    this.writer.writeRequestStartData(path, this.numRequestsByMin);
   }
 
   /**
@@ -126,7 +136,7 @@ public class BulkRequestStatistics {
   }
 
   /**
-   * Launches a median latency calculation in a new thread.
+   * Launches a 99th percentile latency calculation in a new thread.
    *
    * @return the thread handle
    */
@@ -135,6 +145,25 @@ public class BulkRequestStatistics {
     Runnable work = () -> {
       try {
         this.p99LatencyByPath = reader.calculateP99Latencies(this.maxLatencyByPath);
+      } catch (IOException | NumberFormatException e) {
+        handleError(e);
+      }
+    };
+    Thread thread = new Thread(work);
+    thread.start();
+    return thread;
+  }
+
+  /**
+   * Launches a calculation to determine histogram data of request start times in a new thread.
+   *
+   * @return the thread handle
+   */
+  private Thread launchNumRequestsByMin() {
+    // Set up work to be done
+    Runnable work = () -> {
+      try {
+        this.numRequestsByMin = this.reader.calculateNumRequestsByMin(this.wallStart, this.wallStop);
       } catch (IOException | NumberFormatException e) {
         handleError(e);
       }

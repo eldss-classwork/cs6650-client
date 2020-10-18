@@ -100,6 +100,47 @@ public class CsvStatsWriter {
   }
 
   /**
+   * Writes a csv file containing data for a histogram of the number of requests started during each
+   * minute of program execution.
+   *
+   * @param outFilePath the output file path, if exists, will be overwritten
+   * @param data        the data to write, with the indices being the minute buckets
+   */
+  public void writeRequestStartData(String outFilePath, long[] data) {
+    File csvFile = new File(outFilePath);
+
+    // Ensure any old file is overwritten
+    if (csvFile.exists()) {
+      // First try deleting the old file, then try creating a new one
+      try {
+        csvFile.delete();
+        csvFile.createNewFile();
+      } catch (IOException e) {
+        String msg = "Problem overwriting existing CSV file";
+        fatal(msg);
+      }
+    }
+
+    // Write new data
+    try (PrintWriter writer = new PrintWriter(csvFile)) {
+      // Print headers but keep writer open to receive more data
+      String headers = "Minute,Num Requests Started";
+      writer.println(headers);
+
+      // Print data
+      for (int i = 0; i < data.length; i++) {
+        String line = i + "," + data[i];
+        writer.println(line);
+      }
+
+    } catch (Exception e) {
+      String msg = "Problem writing new histogram data file";
+      System.err.println(msg + " - " + e.getMessage());
+    }
+
+  }
+
+  /**
    * Creates a one line string in CSV format from a statistics.SingleRequestStatistics object.
    *
    * @param singleStats the stats to make a string
